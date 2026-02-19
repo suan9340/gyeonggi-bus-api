@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ error: "정류장 없음" });
     }
 
-    // 2️⃣ 여러 정류장 중 노선 존재하는 곳 찾기
+    // 2️⃣ 여러 정류장 중 해당 노선 찾기
     for (const s of stationList) {
 
       const arrivalUrl = new URL(
@@ -57,13 +57,21 @@ module.exports = async function handler(req, res) {
       );
 
       if (bus) {
+        // 🔥 초 → 분/초 변환
+        const sec1 = parseInt(bus.arrivalSec1 || 0);
+        const sec2 = parseInt(bus.arrivalSec2 || 0);
+
+        const firstMin = Math.floor(sec1 / 60);
+        const firstSec = sec1 % 60;
+
+        const secondMin = Math.floor(sec2 / 60);
+        const secondSec = sec2 % 60;
+
         return res.status(200).json({
           station: s.stationName,
           route,
-          firstArrivalMin: bus.predictTime1,
-          secondArrivalMin: bus.predictTime2,
-          firstArrivalSec: bus.arrivalSec1,
-          secondArrivalSec: bus.arrivalSec2
+          firstArrival: `${firstMin}분 ${firstSec}초`,
+          secondArrival: `${secondMin}분 ${secondSec}초`
         });
       }
     }
