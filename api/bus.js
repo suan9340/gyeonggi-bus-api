@@ -12,9 +12,9 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "API 키 없음" });
     }
 
-    // 🔥 정류장 조회 (경로 수정됨)
+    // 🔥 정류장 조회 (v2 포함)
     const stationUrl = new URL(
-      "https://apis.data.go.kr/6410000/busstationservice/getBusStationListv2"
+      "https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationListv2"
     );
 
     stationUrl.searchParams.append("serviceKey", API_KEY);
@@ -37,9 +37,9 @@ module.exports = async function handler(req, res) {
 
     const stationId = stationIdMatch[1];
 
-    // 🔥 도착 조회 (경로 수정됨)
+    // 🔥 도착 조회 (v2 포함)
     const arrivalUrl = new URL(
-      "https://apis.data.go.kr/6410000/busarrivalservice/getBusArrivalListv2"
+      "https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListv2"
     );
 
     arrivalUrl.searchParams.append("serviceKey", API_KEY);
