@@ -8,10 +8,6 @@ module.exports = async function handler(req, res) {
 
     const API_KEY = process.env.GYEONGGI_KEY;
 
-    if (!API_KEY) {
-      return res.status(500).json({ error: "API 키 없음" });
-    }
-
     // 1️⃣ 정류장 검색
     const stationUrl = new URL(
       "https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationListv2"
@@ -22,21 +18,18 @@ module.exports = async function handler(req, res) {
     stationUrl.searchParams.append("pageNo", "1");
     stationUrl.searchParams.append("numOfRows", "10");
 
-    const stationRes = await fetch(stationUrl.toString());
+    const stationRes = await fetch(stationUrl);
     const stationJson = await stationRes.json();
 
-    if (stationJson.response.msgHeader.resultCode !== 0) {
-      return res.status(500).json({ error: "정류장 API 실패", raw: stationJson });
-    }
-
-    const stationList = stationJson.response.msgBody.busStationList;
+    const stationList = stationJson.response?.msgBody?.busStationList;
 
     if (!stationList || stationList.length === 0) {
       return res.status(404).json({ error: "정류장 없음" });
     }
 
-    // 2️⃣ 여러 정류장 중 실제 route가 존재하는 정류장 찾기
+    // 2️⃣ 여러 정류장 중 노선 존재하는 곳 찾기
     for (const s of stationList) {
+
       const arrivalUrl = new URL(
         "https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListv2"
       );
@@ -44,30 +37,33 @@ module.exports = async function handler(req, res) {
       arrivalUrl.searchParams.append("serviceKey", API_KEY);
       arrivalUrl.searchParams.append("stationId", s.stationId);
 
-      const arrivalRes = await fetch(arrivalUrl.toString());
+      const arrivalRes = await fetch(arrivalUrl);
       const arrivalJson = await arrivalRes.json();
 
-      if (arrivalJson.response.msgHeader.resultCode !== 0) {
-        continue;
-      }
+      const resultCode = arrivalJson.response?.msgHeader?.resultCode;
+      if (resultCode !== 0) continue;
 
-      const arrivalList = arrivalJson.response.msgBody.busArrivalList;
-
+      let arrivalList = arrivalJson.response?.msgBody?.busArrivalList;
       if (!arrivalList) continue;
 
-      const bus = arrivalList.find(
-        item =>
-          item.routeName == route ||
-          item.routeNm == route ||
-          item.routeId == route
+      if (!Array.isArray(arrivalList)) {
+        arrivalList = [arrivalList];
+      }
+
+      const bus = arrivalList.find(item =>
+        item.routeName == route ||
+        item.routeNm == route ||
+        item.routeId == route
       );
 
       if (bus) {
         return res.status(200).json({
           station: s.stationName,
           route,
-          firstArrival: bus.predictTime1,
-          secondArrival: bus.predictTime2
+          firstArrivalMin: bus.predictTime1,
+          secondArrivalMin: bus.predictTime2,
+          firstArrivalSec: bus.arrivalSec1,
+          secondArrivalSec: bus.arrivalSec2
         });
       }
     }
