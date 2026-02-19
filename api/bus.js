@@ -8,21 +8,23 @@ export default async function handler(req, res) {
 
     const API_KEY = process.env.GYEONGGI_KEY;
 
-    // 1️⃣ 정류장 검색 (1개만)
-    const stationRes = await fetch(
-      `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${API_KEY}&keyword=${encodeURIComponent(
-        station
-      )}&pageNo=1&numOfRows=1`
-    );
+   // 1️⃣ 정류장 검색 (여러 개 조회)
+const stationRes = await fetch(
+  `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${API_KEY}&keyword=${encodeURIComponent(
+    station
+  )}&pageNo=1&numOfRows=5`
+);
 
-    const stationText = await stationRes.text();
+const stationText = await stationRes.text();
 
-    const stationIdMatch = stationText.match(/<stationId>(.*?)<\/stationId>/);
-    if (!stationIdMatch) {
-      return res.status(404).json({ error: "정류장 없음" });
-    }
+const stationIdMatches = [...stationText.matchAll(/<stationId>(.*?)<\/stationId>/g)];
 
-    const stationId = stationIdMatch[1];
+if (!stationIdMatches.length) {
+  return res.status(404).json({ error: "정류장 없음" });
+}
+
+// 첫 번째 결과 사용 (필요시 고도화 가능)
+const stationId = stationIdMatches[0][1];
 
     // 2️⃣ 도착 정보 조회
     const arrivalRes = await fetch(
