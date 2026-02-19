@@ -7,57 +7,45 @@ export default async function handler(req, res) {
     }
 
     const API_KEY = process.env.GYEONGGI_KEY;
-    const encodedKey = encodeURIComponent(API_KEY);
 
-    // 1️⃣ 정류장 검색 (최대 10개)
+    if (!API_KEY) {
+      return res.status(500).json({ error: "API 키가 설정되지 않았습니다." });
+    }
+
+    // 🔥 encodeURIComponent 제거
+    const serviceKey = API_KEY;
+
+    // 1️⃣ 정류장 검색
     const stationRes = await fetch(
-      `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${encodedKey}&keyword=${encodeURIComponent(
-        station
-      )}&pageNo=1&numOfRows=10`
+      `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${serviceKey}&keyword=${station}&pageNo=1&numOfRows=5`
     );
 
     const stationText = await stationRes.text();
 
-    // stationId + stationName 같이 추출
-    const stationRegex = /<stationId>(.*?)<\/stationId>[\s\S]*?<stationName>(.*?)<\/stationName>/g;
-    const matches = [...stationText.matchAll(stationRegex)];
+    if (stationText.includes("API not found")) {
+      return res.status(500).json({ error: "정류장 API 호출 실패", detail: stationText });
+    }
 
-    if (!matches.length) {
+    const stationIdMatches = [
+      ...stationText.matchAll(/<stationId>(.*?)<\/stationId>/g),
+    ];
+
+    if (!stationIdMatches.length) {
       return res.status(404).json({ error: "정류장 없음" });
     }
 
-    // 이름이 포함되는 정류장 찾기
-    const found = matches.find(m =>
-      m[2].replace(/\s/g, "").includes(station.replace(/\s/g, ""))
-    );
-
-    const stationId = found ? found[1] : matches[0][1];
+    const stationId = stationIdMatches[0][1];
 
     // 2️⃣ 도착 정보 조회
     const arrivalRes = await fetch(
-      `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2?serviceKey=${encodedKey}&stationId=${stationId}`
+      `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2?serviceKey=${serviceKey}&stationId=${stationId}`
     );
 
     const arrivalText = await arrivalRes.text();
 
-    const routeRegex = new RegExp(
-      `<routeName>${route}<\\/routeName>[\\s\\S]*?<predictTime1>(.*?)<\\/predictTime1>[\\s\\S]*?<predictTime2>(.*?)<\\/predictTime2>`
-    );
-
-    const match = arrivalText.match(routeRegex);
-
-    if (!match) {
-      return res.status(404).json({ error: "해당 노선 없음" });
+    if (arrivalText.includes("API not found")) {
+      return res.status(500).json({ error: "도착 API 호출 실패", detail: arrivalText });
     }
 
-    return res.status(200).json({
-      station,
-      route,
-      firstArrival: match[1],
-      secondArrival: match[2]
-    });
-
-  } catch (err) {
-    return res.status(500).json({ error: "서버 오류", detail: err.message });
-  }
-}
+    const routeRegex = new RegExp(
+      `<routeName>${route}<\\/routeName>[\\s\\S]*?<predictTime1>(.*?)<\\/predictTime1>[\\s\\S]()
