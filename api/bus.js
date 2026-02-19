@@ -12,12 +12,22 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "API 키 없음" });
     }
 
-    // 1️⃣ 정류장 검색
-    const stationRes = await fetch(
-      `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${API_KEY}&keyword=${station}&pageNo=1&numOfRows=5`
+    // 🔥 URL 객체 사용 (이게 핵심)
+    const stationUrl = new URL(
+      "https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList"
     );
 
+    stationUrl.searchParams.append("serviceKey", API_KEY.trim());
+    stationUrl.searchParams.append("keyword", station);
+    stationUrl.searchParams.append("pageNo", "1");
+    stationUrl.searchParams.append("numOfRows", "5");
+
+    const stationRes = await fetch(stationUrl.toString());
     const stationText = await stationRes.text();
+
+    if (stationText.includes("API not found")) {
+      return res.status(500).json({ error: "정류장 API 실패", raw: stationText });
+    }
 
     const stationIdMatch = stationText.match(/<stationId>(.*?)<\/stationId>/);
 
@@ -27,11 +37,15 @@ module.exports = async function handler(req, res) {
 
     const stationId = stationIdMatch[1];
 
-    // 2️⃣ 도착 조회
-    const arrivalRes = await fetch(
-      `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2?serviceKey=${API_KEY}&stationId=${stationId}`
+    // 🔥 도착 API
+    const arrivalUrl = new URL(
+      "https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2"
     );
 
+    arrivalUrl.searchParams.append("serviceKey", API_KEY.trim());
+    arrivalUrl.searchParams.append("stationId", stationId);
+
+    const arrivalRes = await fetch(arrivalUrl.toString());
     const arrivalText = await arrivalRes.text();
 
     const routeMatch = arrivalText.match(
