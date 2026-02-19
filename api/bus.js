@@ -12,7 +12,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "API 키 없음" });
     }
 
-    // 🔥 정류장 조회 (v2 포함)
+    // 🔥 1️⃣ 정류장 조회 (JSON 응답)
     const stationUrl = new URL(
       "https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationListv2"
     );
@@ -23,21 +23,21 @@ module.exports = async function handler(req, res) {
     stationUrl.searchParams.append("numOfRows", "5");
 
     const stationRes = await fetch(stationUrl.toString());
-    const stationText = await stationRes.text();
+    const stationJson = await stationRes.json();
 
-    if (stationText.includes("API not found")) {
-      return res.status(500).json({ error: "정류장 API 실패", raw: stationText });
+    if (stationJson.response.msgHeader.resultCode !== 0) {
+      return res.status(500).json({ error: "정류장 API 실패", raw: stationJson });
     }
 
-    const stationIdMatch = stationText.match(/<stationId>(.*?)<\/stationId>/);
+    const stationList = stationJson.response.msgBody.busStationList;
 
-    if (!stationIdMatch) {
-      return res.status(404).json({ error: "정류장 없음", raw: stationText });
+    if (!stationList || stationList.length === 0) {
+      return res.status(404).json({ error: "정류장 없음" });
     }
 
-    const stationId = stationIdMatch[1];
+    const stationId = stationList[0].stationId;
 
-    // 🔥 도착 조회 (v2 포함)
+    // 🔥 2️⃣ 도착 조회 (JSON 응답)
     const arrivalUrl = new URL(
       "https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListv2"
     );
@@ -46,23 +46,25 @@ module.exports = async function handler(req, res) {
     arrivalUrl.searchParams.append("stationId", stationId);
 
     const arrivalRes = await fetch(arrivalUrl.toString());
-    const arrivalText = await arrivalRes.text();
+    const arrivalJson = await arrivalRes.json();
 
-    const routeMatch = arrivalText.match(
-      new RegExp(
-        `<routeName>${route}<\\/routeName>[\\s\\S]*?<predictTime1>(.*?)<\\/predictTime1>[\\s\\S]*?<predictTime2>(.*?)<\\/predictTime2>`
-      )
-    );
+    if (arrivalJson.response.msgHeader.resultCode !== 0) {
+      return res.status(500).json({ error: "도착 API 실패", raw: arrivalJson });
+    }
 
-    if (!routeMatch) {
-      return res.status(404).json({ error: "해당 노선 없음", raw: arrivalText });
+    const arrivalList = arrivalJson.response.msgBody.busArrivalList;
+
+    const bus = arrivalList.find(item => item.routeName == route);
+
+    if (!bus) {
+      return res.status(404).json({ error: "해당 노선 없음" });
     }
 
     return res.status(200).json({
       station,
       route,
-      firstArrival: routeMatch[1],
-      secondArrival: routeMatch[2]
+      firstArrival: bus.predictTime1,
+      secondArrival: bus.predictTime2
     });
 
   } catch (err) {
