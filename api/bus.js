@@ -12,41 +12,40 @@ export default async function handler(req, res) {
     const stationRes = await fetch(
       `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${API_KEY}&keyword=${encodeURIComponent(
         station
-      )}&pageNo=1&numOfRows=1&format=json`
+      )}&pageNo=1&numOfRows=1`
     );
 
-    const stationData = await stationRes.json();
-    const stationList = stationData.response?.msgBody?.busStationList;
+    const stationText = await stationRes.text();
 
-    if (!stationList || stationList.length === 0) {
+    const stationIdMatch = stationText.match(/<stationId>(.*?)<\/stationId>/);
+    if (!stationIdMatch) {
       return res.status(404).json({ error: "정류장 없음" });
     }
 
-    const stationId = stationList[0].stationId;
+    const stationId = stationIdMatch[1];
 
     // 2️⃣ 도착 정보 조회
     const arrivalRes = await fetch(
-      `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2?serviceKey=${API_KEY}&stationId=${stationId}&format=json`
+      `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2?serviceKey=${API_KEY}&stationId=${stationId}`
     );
 
-    const arrivalData = await arrivalRes.json();
-    const arrivals = arrivalData.response?.msgBody?.busArrivalList;
+    const arrivalText = await arrivalRes.text();
 
-    if (!arrivals) {
-      return res.status(404).json({ error: "도착 정보 없음" });
-    }
+    const routeRegex = new RegExp(
+      `<routeName>${route}<\\/routeName>[\\s\\S]*?<predictTime1>(.*?)<\\/predictTime1>[\\s\\S]*?<predictTime2>(.*?)<\\/predictTime2>`
+    );
 
-    const bus = arrivals.find((item) => item.routeName == route);
+    const match = arrivalText.match(routeRegex);
 
-    if (!bus) {
+    if (!match) {
       return res.status(404).json({ error: "해당 노선 없음" });
     }
 
     return res.status(200).json({
       station,
       route,
-      firstArrival: bus.predictTime1,
-      secondArrival: bus.predictTime2
+      firstArrival: match[1],
+      secondArrival: match[2]
     });
 
   } catch (err) {
