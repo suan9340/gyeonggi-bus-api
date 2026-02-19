@@ -8,27 +8,34 @@ export default async function handler(req, res) {
 
     const API_KEY = process.env.GYEONGGI_KEY;
 
-   // 1️⃣ 정류장 검색 (여러 개 조회)
-const stationRes = await fetch(
-  `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${API_KEY}&keyword=${encodeURIComponent(
-    station
-  )}&pageNo=1&numOfRows=5`
-);
+    if (!API_KEY) {
+      return res.status(500).json({ error: "API 키가 설정되지 않았습니다." });
+    }
 
-const stationText = await stationRes.text();
+    const encodedKey = encodeURIComponent(API_KEY);
 
-const stationIdMatches = [...stationText.matchAll(/<stationId>(.*?)<\/stationId>/g)];
+    // 1️⃣ 정류장 검색 (최대 5개 조회)
+    const stationRes = await fetch(
+      `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${encodedKey}&keyword=${encodeURIComponent(
+        station
+      )}&pageNo=1&numOfRows=5`
+    );
 
-if (!stationIdMatches.length) {
-  return res.status(404).json({ error: "정류장 없음" });
-}
+    const stationText = await stationRes.text();
 
-// 첫 번째 결과 사용 (필요시 고도화 가능)
-const stationId = stationIdMatches[0][1];
+    const stationIdMatches = [
+      ...stationText.matchAll(/<stationId>(.*?)<\/stationId>/g),
+    ];
+
+    if (!stationIdMatches.length) {
+      return res.status(404).json({ error: "정류장 없음" });
+    }
+
+    const stationId = stationIdMatches[0][1];
 
     // 2️⃣ 도착 정보 조회
     const arrivalRes = await fetch(
-      `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2?serviceKey=${API_KEY}&stationId=${stationId}`
+      `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2?serviceKey=${encodedKey}&stationId=${stationId}`
     );
 
     const arrivalText = await arrivalRes.text();
@@ -47,10 +54,13 @@ const stationId = stationIdMatches[0][1];
       station,
       route,
       firstArrival: match[1],
-      secondArrival: match[2]
+      secondArrival: match[2],
     });
 
   } catch (err) {
-    return res.status(500).json({ error: "서버 오류", detail: err.message });
+    return res.status(500).json({
+      error: "서버 오류",
+      detail: err.message,
+    });
   }
 }
