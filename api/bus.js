@@ -1,6 +1,6 @@
 module.exports = async function handler(req, res) {
   try {
-    const { station, route, direction } = req.query;
+    const { station, route } = req.query;
 
     if (!station || !route) {
       return res.status(400).json({ error: "station과 route가 필요합니다." });
@@ -8,7 +8,6 @@ module.exports = async function handler(req, res) {
 
     const API_KEY = process.env.GYEONGGI_KEY;
 
-    // 1️⃣ 정류장 검색
     const stationUrl = new URL(
       "https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationListv2"
     );
@@ -21,24 +20,9 @@ module.exports = async function handler(req, res) {
     const stationRes = await fetch(stationUrl);
     const stationJson = await stationRes.json();
 
-    let stationList = stationJson.response?.msgBody?.busStationList;
+    const stationList = stationJson.response?.msgBody?.busStationList;
+    if (!stationList) return res.status(404).json({ error: "정류장 없음" });
 
-    if (!stationList || stationList.length === 0) {
-      return res.status(404).json({ error: "정류장 없음" });
-    }
-
-    // 🔥 방면 필터 적용
-    if (direction) {
-      stationList = stationList.filter(s =>
-        s.stationName.includes(direction)
-      );
-
-      if (stationList.length === 0) {
-        return res.status(404).json({ error: "해당 방면 정류장 없음" });
-      }
-    }
-
-    // 2️⃣ 해당 노선 존재하는 정류장 찾기
     for (const s of stationList) {
 
       const arrivalUrl = new URL(
@@ -58,15 +42,15 @@ module.exports = async function handler(req, res) {
         arrivalList = [arrivalList];
       }
 
-      const bus = arrivalList.find(item =>
-        item.routeName == route ||
-        item.routeNm == route ||
-        item.routeId == route
-      );
+      const bus = arrivalList.find(item => {
+        const name = (item.routeName || item.routeNm || item.routeId || "").toString().trim();
+        return name.replace("번","") === route.trim();
+      });
 
       if (bus) {
-        const sec1 = parseInt(bus.arrivalSec1 || 0);
-        const sec2 = parseInt(bus.arrivalSec2 || 0);
+
+        const sec1 = parseInt(bus.arrivalSec1 || bus.predictTime1 * 60 || 0);
+        const sec2 = parseInt(bus.arrivalSec2 || bus.predictTime2 * 60 || 0);
 
         return res.status(200).json({
           station: s.stationName,
