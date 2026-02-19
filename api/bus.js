@@ -1,6 +1,6 @@
 module.exports = async function handler(req, res) {
   try {
-    const { station, route } = req.query;
+    const { station, route, direction } = req.query;
 
     if (!station || !route) {
       return res.status(400).json({ error: "station과 route가 필요합니다." });
@@ -21,13 +21,24 @@ module.exports = async function handler(req, res) {
     const stationRes = await fetch(stationUrl);
     const stationJson = await stationRes.json();
 
-    const stationList = stationJson.response?.msgBody?.busStationList;
+    let stationList = stationJson.response?.msgBody?.busStationList;
 
     if (!stationList || stationList.length === 0) {
       return res.status(404).json({ error: "정류장 없음" });
     }
 
-    // 2️⃣ 여러 정류장 중 해당 노선 찾기
+    // 🔥 방면 필터 적용
+    if (direction) {
+      stationList = stationList.filter(s =>
+        s.stationName.includes(direction)
+      );
+
+      if (stationList.length === 0) {
+        return res.status(404).json({ error: "해당 방면 정류장 없음" });
+      }
+    }
+
+    // 2️⃣ 해당 노선 존재하는 정류장 찾기
     for (const s of stationList) {
 
       const arrivalUrl = new URL(
@@ -39,9 +50,6 @@ module.exports = async function handler(req, res) {
 
       const arrivalRes = await fetch(arrivalUrl);
       const arrivalJson = await arrivalRes.json();
-
-      const resultCode = arrivalJson.response?.msgHeader?.resultCode;
-      if (resultCode !== 0) continue;
 
       let arrivalList = arrivalJson.response?.msgBody?.busArrivalList;
       if (!arrivalList) continue;
@@ -57,21 +65,14 @@ module.exports = async function handler(req, res) {
       );
 
       if (bus) {
-        // 🔥 초 → 분/초 변환
         const sec1 = parseInt(bus.arrivalSec1 || 0);
         const sec2 = parseInt(bus.arrivalSec2 || 0);
-
-        const firstMin = Math.floor(sec1 / 60);
-        const firstSec = sec1 % 60;
-
-        const secondMin = Math.floor(sec2 / 60);
-        const secondSec = sec2 % 60;
 
         return res.status(200).json({
           station: s.stationName,
           route,
-          firstArrival: `${firstMin}분 ${firstSec}초`,
-          secondArrival: `${secondMin}분 ${secondSec}초`
+          firstArrival: `${Math.floor(sec1/60)}분 ${sec1%60}초`,
+          secondArrival: `${Math.floor(sec2/60)}분 ${sec2%60}초`
         });
       }
     }
