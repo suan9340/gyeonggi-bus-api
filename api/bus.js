@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     const { station, route } = req.query;
 
@@ -9,43 +9,52 @@ export default async function handler(req, res) {
     const API_KEY = process.env.GYEONGGI_KEY;
 
     if (!API_KEY) {
-      return res.status(500).json({ error: "API 키가 설정되지 않았습니다." });
+      return res.status(500).json({ error: "API 키 없음" });
     }
-
-    // 🔥 encodeURIComponent 제거
-    const serviceKey = API_KEY;
 
     // 1️⃣ 정류장 검색
     const stationRes = await fetch(
-      `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${serviceKey}&keyword=${station}&pageNo=1&numOfRows=5`
+      `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${API_KEY}&keyword=${station}&pageNo=1&numOfRows=5`
     );
 
     const stationText = await stationRes.text();
 
-    if (stationText.includes("API not found")) {
-      return res.status(500).json({ error: "정류장 API 호출 실패", detail: stationText });
+    const stationIdMatch = stationText.match(/<stationId>(.*?)<\/stationId>/);
+
+    if (!stationIdMatch) {
+      return res.status(404).json({ error: "정류장 없음", raw: stationText });
     }
 
-    const stationIdMatches = [
-      ...stationText.matchAll(/<stationId>(.*?)<\/stationId>/g),
-    ];
+    const stationId = stationIdMatch[1];
 
-    if (!stationIdMatches.length) {
-      return res.status(404).json({ error: "정류장 없음" });
-    }
-
-    const stationId = stationIdMatches[0][1];
-
-    // 2️⃣ 도착 정보 조회
+    // 2️⃣ 도착 조회
     const arrivalRes = await fetch(
-      `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2?serviceKey=${serviceKey}&stationId=${stationId}`
+      `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2?serviceKey=${API_KEY}&stationId=${stationId}`
     );
 
     const arrivalText = await arrivalRes.text();
 
-    if (arrivalText.includes("API not found")) {
-      return res.status(500).json({ error: "도착 API 호출 실패", detail: arrivalText });
+    const routeMatch = arrivalText.match(
+      new RegExp(
+        `<routeName>${route}<\\/routeName>[\\s\\S]*?<predictTime1>(.*?)<\\/predictTime1>[\\s\\S]*?<predictTime2>(.*?)<\\/predictTime2>`
+      )
+    );
+
+    if (!routeMatch) {
+      return res.status(404).json({ error: "해당 노선 없음", raw: arrivalText });
     }
 
-    const routeRegex = new RegExp(
-      `<routeName>${route}<\\/routeName>[\\s\\S]*?<predictTime1>(.*?)<\\/predictTime1>[\\s\\S]()
+    return res.status(200).json({
+      station,
+      route,
+      firstArrival: routeMatch[1],
+      secondArrival: routeMatch[2]
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      error: "서버 오류",
+      detail: err.message
+    });
+  }
+};
