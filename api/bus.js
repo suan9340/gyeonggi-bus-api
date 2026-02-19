@@ -12,12 +12,12 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: "API 키 없음" });
     }
 
-    // 🔥 URL 객체 사용 (이게 핵심)
+    // 🔥 정류장 조회 (경로 수정됨)
     const stationUrl = new URL(
-      "https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList"
+      "https://apis.data.go.kr/6410000/busstationservice/getBusStationListv2"
     );
 
-    stationUrl.searchParams.append("serviceKey", API_KEY.trim());
+    stationUrl.searchParams.append("serviceKey", API_KEY);
     stationUrl.searchParams.append("keyword", station);
     stationUrl.searchParams.append("pageNo", "1");
     stationUrl.searchParams.append("numOfRows", "5");
@@ -37,12 +37,12 @@ module.exports = async function handler(req, res) {
 
     const stationId = stationIdMatch[1];
 
-    // 🔥 도착 API
+    // 🔥 도착 조회 (경로 수정됨)
     const arrivalUrl = new URL(
-      "https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListV2"
+      "https://apis.data.go.kr/6410000/busarrivalservice/getBusArrivalListv2"
     );
 
-    arrivalUrl.searchParams.append("serviceKey", API_KEY.trim());
+    arrivalUrl.searchParams.append("serviceKey", API_KEY);
     arrivalUrl.searchParams.append("stationId", stationId);
 
     const arrivalRes = await fetch(arrivalUrl.toString());
