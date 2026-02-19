@@ -7,31 +7,31 @@ export default async function handler(req, res) {
     }
 
     const API_KEY = process.env.GYEONGGI_KEY;
-
-    if (!API_KEY) {
-      return res.status(500).json({ error: "API 키가 설정되지 않았습니다." });
-    }
-
     const encodedKey = encodeURIComponent(API_KEY);
 
-    // 1️⃣ 정류장 검색 (최대 5개 조회)
+    // 1️⃣ 정류장 검색 (최대 10개)
     const stationRes = await fetch(
       `https://apis.data.go.kr/6410000/busstationservice/v2/getBusStationList?serviceKey=${encodedKey}&keyword=${encodeURIComponent(
         station
-      )}&pageNo=1&numOfRows=5`
+      )}&pageNo=1&numOfRows=10`
     );
 
     const stationText = await stationRes.text();
 
-    const stationIdMatches = [
-      ...stationText.matchAll(/<stationId>(.*?)<\/stationId>/g),
-    ];
+    // stationId + stationName 같이 추출
+    const stationRegex = /<stationId>(.*?)<\/stationId>[\s\S]*?<stationName>(.*?)<\/stationName>/g;
+    const matches = [...stationText.matchAll(stationRegex)];
 
-    if (!stationIdMatches.length) {
+    if (!matches.length) {
       return res.status(404).json({ error: "정류장 없음" });
     }
 
-    const stationId = stationIdMatches[0][1];
+    // 이름이 포함되는 정류장 찾기
+    const found = matches.find(m =>
+      m[2].replace(/\s/g, "").includes(station.replace(/\s/g, ""))
+    );
+
+    const stationId = found ? found[1] : matches[0][1];
 
     // 2️⃣ 도착 정보 조회
     const arrivalRes = await fetch(
@@ -54,13 +54,10 @@ export default async function handler(req, res) {
       station,
       route,
       firstArrival: match[1],
-      secondArrival: match[2],
+      secondArrival: match[2]
     });
 
   } catch (err) {
-    return res.status(500).json({
-      error: "서버 오류",
-      detail: err.message,
-    });
+    return res.status(500).json({ error: "서버 오류", detail: err.message });
   }
 }
